@@ -143,13 +143,19 @@ client.on('messageCreate', async (message) => {
                 return message.reply('❌ Usage: !register <showdown_name>')
             }
 
-            await axios.post(`${API}/player/register`, {
-                discord_id: message.author.id,
-                name: message.author.username,
-                showdown_name: showdown
-            })
+            try {
+                await axios.post(`${API}/player/register`, {
+                    discord_id: message.author.id,
+                    name: message.author.username,
+                    showdown_name: showdown
+                })
 
-            return message.reply('✅ You are now registered as a trainer!')
+                return message.reply('✅ You are now registered as a trainer!')
+            } catch (err) {
+                const errorMsg = err.response?.data?.error || err.message
+                console.error('Registration Error:', errorMsg)
+                return message.reply(`❌ Registration failed: **${errorMsg}**`)
+            }
         }
 
         // 📝 Edit Showdown Name
