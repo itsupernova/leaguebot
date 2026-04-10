@@ -14,6 +14,59 @@ const client = new Client({
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return
+
+    // 1. Handle Active Interactive Sessions (responses without '!')
+    if (gymSetupSessions.has(message.author.id) && !message.content.startsWith('!')) {
+        const session = gymSetupSessions.get(message.author.id)
+        const content = message.content.trim()
+
+        try {
+            if (session.step === 1) {
+                session.data.name = content
+                session.step = 2
+                return message.reply('🎨 Enter the **Gym Type** (e.g. Fire, Water):')
+            }
+
+            if (session.step === 2) {
+                session.data.type = content
+                session.step = 3
+                return message.reply('⚔️ Enter the **Battle Style** (Single / Double):')
+            }
+
+            if (session.step === 3) {
+                session.data.style = content
+                session.step = 4
+                return message.reply('👤 Mention the **Gym Leader**:')
+            }
+
+            if (session.step === 4) {
+                const mention = message.mentions.users.first()
+                if (!mention) return message.reply('❌ Please mention a valid user')
+
+                session.data.leaderDiscordId = mention.id
+                session.step = 5
+                return message.reply('🏅 Enter the **Badge Name**:')
+            }
+
+            if (session.step === 5) {
+                session.data.badge = content
+                await axios.post(`${API}/gym/create`, session.data)
+                gymSetupSessions.delete(message.author.id)
+
+                return message.reply(
+                    `🏛 Gym Created!\n` +
+                    `Name: ${session.data.name}\n` +
+                    `Type: ${session.data.type}\n` +
+                    `Style: ${session.data.style}\n` +
+                    `Badge: ${session.data.badge}`
+                )
+            }
+        } catch (err) {
+            gymSetupSessions.delete(message.author.id)
+            return message.reply(err.response?.data?.error || '❌ Failed to complete gym setup')
+        }
+    }
+
     if (!message.content.startsWith('!')) return
 
     const args = message.content.slice(1).split(' ')
@@ -442,64 +495,15 @@ client.on('messageCreate', async (message) => {
             return message.reply('🏛 Enter the **Gym Name**:')
         }
 
-        // Gym setup step handler (responds to any message from a user in gym setup)
-        if (gymSetupSessions.has(message.author.id)) {
-            const session = gymSetupSessions.get(message.author.id)
-            const content = message.content.trim()
-
-            if (session.step === 1) {
-                session.data.name = content
-                session.step = 2
-                return message.reply('🎨 Enter the **Gym Type** (e.g. Fire, Water):')
+        // ❌ Cancel Gym Setup
+        if (command === 'cancelgym') {
+            if (gymSetupSessions.has(message.author.id)) {
+                gymSetupSessions.delete(message.author.id)
+                return message.reply('🛑 Gym setup cancelled.')
             }
-
-            if (session.step === 2) {
-                session.data.type = content
-                session.step = 3
-                return message.reply('⚔️ Enter the **Battle Style** (Single / Double):')
-            }
-
-            if (session.step === 3) {
-                session.data.style = content
-                session.step = 4
-                return message.reply('👤 Mention the **Gym Leader**:')
-            }
-
-            if (session.step === 4) {
-                const mention = message.mentions.users.first()
-
-                if (!mention) {
-                    return message.reply('❌ Please mention a valid user')
-                }
-
-                session.data.leaderDiscordId = mention.id
-                session.step = 5
-                return message.reply('🏅 Enter the **Badge Name**:')
-            }
-
-            if (session.step === 5) {
-                session.data.badge = content
-
-                try {
-                    await axios.post(`${API}/gym/create`, session.data)
-                    gymSetupSessions.delete(message.author.id)
-
-                    return message.reply(
-                        `🏛 Gym Created!\n` +
-                        `Name: ${session.data.name}\n` +
-                        `Type: ${session.data.type}\n` +
-                        `Style: ${session.data.style}\n` +
-                        `Badge: ${session.data.badge}`
-                    )
-
-                } catch (err) {
-                    gymSetupSessions.delete(message.author.id)
-                    return message.reply(
-                        err.response?.data?.error || '❌ Failed to create gym'
-                    )
-                }
-            }
+            return message.reply('❌ You are not currently creating a gym.')
         }
+
 
         // 🔁 Set Gym Leader
         if (command === 'set') {
