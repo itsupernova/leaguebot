@@ -7,6 +7,7 @@ import { isAdmin } from './utils/isAdmin.js'
 dotenv.config()
 const API = process.env.API_BASE_URL
 const gymSetupSessions = new Map()
+const eliteSetupSessions = new Map()
 
 const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMessageReactions, GatewayIntentBits.MessageContent]
@@ -64,6 +65,46 @@ client.on('messageCreate', async (message) => {
         } catch (err) {
             gymSetupSessions.delete(message.author.id)
             return message.reply(err.response?.data?.error || '❌ Failed to complete gym setup')
+        }
+    }
+
+    // 1.1 Handle Elite Four Setup Sessions
+    if (eliteSetupSessions.has(message.author.id) && !message.content.startsWith('!')) {
+        const session = eliteSetupSessions.get(message.author.id)
+        const content = message.content.trim()
+
+        try {
+            if (session.step === 1) {
+                const mention = message.mentions.users.first()
+                if (!mention) return message.reply('❌ Please mention a valid user to assign as Elite Four:')
+                
+                session.data.playerDiscordId = mention.id
+                session.step = 2
+                return message.reply('🎨 Enter the **Elite Four Type** (e.g. Dragon, Steel):')
+            }
+
+            if (session.step === 2) {
+                session.data.type = content
+                session.step = 3
+                return message.reply('⚔️ Enter the **Battle Style** (Single / Double):')
+            }
+
+            if (session.step === 3) {
+                session.data.style = content
+                
+                await axios.post(`${API}/elite-four/create`, session.data)
+                eliteSetupSessions.delete(message.author.id)
+
+                return message.reply(
+                    `🏆 **Elite Four Member Assigned!**\n` +
+                    `👤 Player: <@${session.data.playerDiscordId}>\n` +
+                    `🎨 Type: ${session.data.type}\n` +
+                    `⚔️ Style: ${session.data.style}`
+                )
+            }
+        } catch (err) {
+            eliteSetupSessions.delete(message.author.id)
+            return message.reply(err.response?.data?.error || '❌ Failed to complete Elite Four setup')
         }
     }
 
@@ -504,6 +545,38 @@ client.on('messageCreate', async (message) => {
             return message.reply('❌ You are not currently creating a gym.')
         }
 
+        // 🏆 Register Elite Four (interactive)
+        if (command === 'signelite') {
+            if (!isAdmin(message.member, message.author.id)) {
+                return message.reply('❌ Admin only')
+            }
+
+            if (eliteSetupSessions.has(message.author.id)) {
+                return message.reply('⚠️ You are already assigning an Elite Four. Cancel with `!cancelelite`')
+            }
+
+            eliteSetupSessions.set(message.author.id, {
+                step: 1,
+                data: {}
+            })
+            setTimeout(() => {
+                if (eliteSetupSessions.has(message.author.id)) {
+                    eliteSetupSessions.delete(message.author.id)
+                }
+            }, 2 * 60 * 1000)
+
+            return message.reply('🏆 Mention the player to be assigned as **Elite Four**:')
+        }
+
+        // ❌ Cancel Elite Four Setup
+        if (command === 'cancelelite') {
+            if (eliteSetupSessions.has(message.author.id)) {
+                eliteSetupSessions.delete(message.author.id)
+                return message.reply('🛑 Elite Four setup cancelled.')
+            }
+            return message.reply('❌ You are not currently assigning an Elite Four.')
+        }
+
 
         // 🔁 Set Gym Leader
         if (command === 'set') {
@@ -591,6 +664,33 @@ client.on('messageCreate', async (message) => {
 
             } catch (err) {
                 return message.reply('❌ Failed to fetch gyms')
+            }
+        }
+
+        // 🏆 Elite Four List
+        if (command === 'elitelist') {
+            try {
+                const res = await axios.get(`${API}/elite-four/list`)
+                const e4Members = res.data
+
+                if (!e4Members.length) {
+                    return message.reply('🏆 No Elite Four members registered yet.')
+                }
+
+                const list = e4Members.map((e4, i) => {
+                    return `${i + 1}. **${e4.player.name}**\n` +
+                        `🎨 Type: ${e4.type}\n` +
+                        `⚔️ Style: ${e4.style}`
+                }).join('\n\n')
+
+                const embed = new EmbedBuilder()
+                    .setTitle('🏆 Requiem League Elite Four')
+                    .setDescription(list)
+
+                return message.reply({ embeds: [embed] })
+
+            } catch (err) {
+                return message.reply('❌ Failed to fetch Elite Four list')
             }
         }
 
