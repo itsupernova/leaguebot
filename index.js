@@ -175,6 +175,30 @@ client.on('messageCreate', async (message) => {
             return message.reply(`🏆 Leaderboard:\n${top}`)
         }
 
+        // 🏛 Clan Leaderboard
+        if (command === 'clanlb') {
+            try {
+                const res = await axios.get(`${API}/leaderboard/clans`)
+
+                const clans = res.data
+                if (!clans.length) {
+                    return message.reply('🏛 No clans registered yet.')
+                }
+
+                const list = clans
+                    .map((c, i) => `${i + 1}. **${c.name}** | 🏛️ Gyms: ${c.gyms_count} | 🎯 Points: ${c.clan_points} | 📈 Change: ${c.change > 0 ? '+' : ''}${c.change}`)
+                    .join('\n')
+
+                const embed = new EmbedBuilder()
+                    .setTitle('🏛 Clan Leaderboard')
+                    .setDescription(list)
+
+                return message.reply({ embeds: [embed] })
+            } catch (err) {
+                return message.reply('❌ Failed to fetch clan leaderboard')
+            }
+        }
+
         // ⚔️ Start Raid
         if (command === 'raid') {
             const attacker = args[1]
