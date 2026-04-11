@@ -753,6 +753,41 @@ client.on('messageCreate', async (message) => {
             }
         }
 
+        // 🗑️ Take Badge (ADMIN)
+        if (command === 'takebadge') {
+            if (!isAdmin(message.member, message.author.id)) {
+                return message.reply('❌ Admin only')
+            }
+
+            const mention = message.mentions.users.first()
+            if (!mention) {
+                return message.reply('❌ Usage: !takebadge <badge_name> @player')
+            }
+
+            const badgeNameStr = message.content
+                .replace('!takebadge', '')
+                .replace(/<@!?\d+>/g, '') 
+                .trim()
+
+            if (!badgeNameStr) {
+                return message.reply('❌ Usage: !takebadge <badge_name> @player')
+            }
+
+            try {
+                const res = await axios.post(`${API}/gym/take-badge`, {
+                    targetDiscordId: mention.id,
+                    badgeName: badgeNameStr
+                })
+
+                if (res.data.success) {
+                    return message.reply(`🗑️ **${res.data.badge}** badge has been taken from **${res.data.player}**!`)
+                }
+
+            } catch (err) {
+                return message.reply(err.response?.data?.error || '❌ Failed to take badge')
+            }
+        }
+
         // 🎁 Give Pokémon (ADMIN)
         if (command === 'give') {
             if (!isAdmin(message.member, message.author.id)) {
