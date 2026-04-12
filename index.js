@@ -143,13 +143,29 @@ client.on('messageCreate', async (message) => {
                     ? p.badges.map(b => `🏅 ${b.badge.name}`).join(', ')
                     : 'None'
 
+                const classEmojiMap = {
+                    'Regular': 'poke',
+                    'Premier': 'premier',
+                    'Great': 'great',
+                    'Beast': 'beast',
+                    'Luxury': 'luxury',
+                    'Ultra': 'ultra',
+                    'Master': 'master'
+                }
+                const emojiName = classEmojiMap[p.class]
+                let emojiStr = ''
+                if (emojiName) {
+                    const foundEmoji = client.emojis.cache.find(e => e.name === emojiName)
+                    if (foundEmoji) emojiStr = `${foundEmoji} `
+                }
+
                 const embed = new EmbedBuilder()
                     .setTitle(`👤 ${p.name}`)
                     .setThumbnail(mention.displayAvatarURL())
                     .addFields(
                         { name: '⚡ Rating', value: `${p.rating}`, inline: true },
                         { name: '🏆 Rank', value: `#${p.rank}`, inline: true },
-                        { name: '🎖 Class', value: p.class, inline: true },
+                        { name: '🎖 Class', value: `${emojiStr}${p.class}`, inline: true },
                         { name: '🏳 Clan', value: p.clan?.name || 'None', inline: true },
                         { name: '📦 Box Size', value: `${p.pokemon.length}/10`, inline: true },
                         { name: '🔐 Special Box', value: `${p.special_pokemon.length}/4`, inline: true },
