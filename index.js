@@ -315,41 +315,43 @@ client.on('messageCreate', async (message) => {
         // 🤝 Trade
         if (command === 'trade') {
             const mention = message.mentions.users.first()
-            const pokemonId = args[2]
+            const offerPokemon = args[2]
+            const requestPokemon = args[3]
 
-            if (!mention || !pokemonId) {
-                return message.reply('❌ Usage: !trade @user <pokemonId>')
+            if (!mention || !offerPokemon || !requestPokemon) {
+                return message.reply('❌ Usage: !trade @user <your_pokemon> <their_pokemon>')
             }
 
-            const sender = await getPlayer(message.author.id)
-            const receiver = await getPlayer(mention.id)
+            try {
+                const res = await axios.post(`${API}/trade/start`, {
+                    fromDiscordId: message.author.id,
+                    toDiscordId: mention.id,
+                    offerPokemonName: offerPokemon,
+                    requestPokemonName: requestPokemon
+                })
 
-            const res = await axios.post(`${API}/trade/start`, {
-                fromPlayerId: sender.id,
-                toPlayerId: receiver.id,
-                pokemonId
-            })
+                const tradeId = res.data.id
 
-            const tradeId = res.data.id
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`accept_${tradeId}_${mention.id}`)
+                        .setLabel('Accept')
+                        .setStyle(ButtonStyle.Success),
 
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`accept_${tradeId}`)
-                    .setLabel('Accept')
-                    .setStyle(ButtonStyle.Success),
+                    new ButtonBuilder()
+                        .setCustomId(`reject_${tradeId}_${mention.id}`)
+                        .setLabel('Reject')
+                        .setStyle(ButtonStyle.Danger)
+                )
 
-                new ButtonBuilder()
-                    .setCustomId(`reject_${tradeId}`)
-                    .setLabel('Reject')
-                    .setStyle(ButtonStyle.Danger)
-            )
+                return message.reply({
+                    content: `🤝 <@${mention.id}>, **${message.author.username}** wants to trade their **${offerPokemon}** for your **${requestPokemon}**!\n⏱ Expires in 1 minute.`,
+                    components: [row]
+                })
 
-            await mention.send({
-                content: `🤝 Trade request from **${message.author.username}**\nPokémon ID: ${pokemonId}\n⏱ Expires in 1 minute`,
-                components: [row]
-            })
-
-            return message.reply('📨 Trade request sent via DM!')
+            } catch (err) {
+                 return message.reply(err.response?.data?.error || '❌ Failed to start trade')
+            }
         }
 
         // 📦 Register Box
@@ -1163,7 +1165,13 @@ client.on('messageCreate', async (message) => {
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return
 
-    const [action, tradeId] = interaction.customId.split('_')
+    const [action, tradeId, targetDiscordId] = interaction.customId.split('_')
+
+    if (action === 'accept' || action === 'reject') {
+        if (targetDiscordId && interaction.user.id !== targetDiscordId) {
+            return interaction.reply({ content: '❌ Only the mentioned player can interact with these buttons.', ephemeral: true })
+        }
+    }
 
     try {
         if (action === 'accept') {
