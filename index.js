@@ -354,27 +354,34 @@ client.on('messageCreate', async (message) => {
             }
         }
 
-        // 📦 Register Box (ADMIN)
+        // 📦 Register Box
         if (command === 'registerbox') {
-            if (!isAdmin(message.member, message.author.id)) {
-                return message.reply('❌ Admin only')
-            }
+            let targetId = message.author.id
+            let targetName = message.author.username
+            let url = args[1]
 
             const mention = message.mentions.users.first()
-            const url = args[2]
+            if (mention) {
+                if (!isAdmin(message.member, message.author.id)) {
+                    return message.reply('❌ Admin only for registering other players')
+                }
+                targetId = mention.id
+                targetName = mention.username
+                url = args[2]
+            }
 
-            if (!mention || !url) {
-                return message.reply('❌ Usage: !registerbox @player <pokepaste_url>')
+            if (!url) {
+                return message.reply('❌ Usage: !registerbox [@player] <pokepaste_url>')
             }
 
             try {
                 const res = await axios.post(`${API}/player/register-box`, {
-                    discordId: mention.id,
+                    discordId: targetId,
                     url
                 })
 
                 return message.reply(
-                    `📦 Box registered for ${mention.username}!\nPokémon (${res.data.count}):\n${res.data.pokemon.join(', ')}`
+                    `📦 Box registered ${mention ? `for ${targetName}` : 'successfully'}!\nPokémon (${res.data.count}):\n${res.data.pokemon.join(', ')}`
                 )
 
             } catch (err) {
@@ -383,21 +390,33 @@ client.on('messageCreate', async (message) => {
         }
 
         // 🔐 Register Special
-        if (command === 'registerspecial') {
-            const url = args[1]
+        if (command === 'rspecial' || command === 'registerspecial') {
+            let targetId = message.author.id
+            let targetName = message.author.username
+            let url = args[1]
+
+            const mention = message.mentions.users.first()
+            if (mention) {
+                if (!isAdmin(message.member, message.author.id)) {
+                    return message.reply('❌ Admin only for registering other players')
+                }
+                targetId = mention.id
+                targetName = mention.username
+                url = args[2]
+            }
 
             if (!url) {
-                return message.reply('❌ Usage: !registerspecial <pokepaste_url>')
+                return message.reply('❌ Usage: !rspecial [@player] <pokepaste_url>')
             }
 
             try {
                 const res = await axios.post(`${API}/player/register-special`, {
-                    discordId: message.author.id,
+                    discordId: targetId,
                     url
                 })
 
                 return message.reply(
-                    `🔐 Special box registered (${res.data.role})!\n` +
+                    `🔐 Special box registered ${mention ? `for ${targetName} ` : ''}(${res.data.role})!\n` +
                     `Pokémon (${res.data.count}):\n${res.data.pokemon.join(', ')}`
                 )
 
