@@ -354,22 +354,27 @@ client.on('messageCreate', async (message) => {
             }
         }
 
-        // 📦 Register Box
+        // 📦 Register Box (ADMIN)
         if (command === 'registerbox') {
-            const url = args[1]
+            if (!isAdmin(message.member, message.author.id)) {
+                return message.reply('❌ Admin only')
+            }
 
-            if (!url) {
-                return message.reply('❌ Usage: !registerbox <pokepaste_url>')
+            const mention = message.mentions.users.first()
+            const url = args[2]
+
+            if (!mention || !url) {
+                return message.reply('❌ Usage: !registerbox @player <pokepaste_url>')
             }
 
             try {
                 const res = await axios.post(`${API}/player/register-box`, {
-                    discordId: message.author.id,
+                    discordId: mention.id,
                     url
                 })
 
                 return message.reply(
-                    `📦 Box registered!\nPokémon (${res.data.count}):\n${res.data.pokemon.join(', ')}`
+                    `📦 Box registered for ${mention.username}!\nPokémon (${res.data.count}):\n${res.data.pokemon.join(', ')}`
                 )
 
             } catch (err) {
