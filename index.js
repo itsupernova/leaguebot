@@ -215,30 +215,122 @@ client.on('messageCreate', async (message) => {
             }
         }
 
+        // 🔄 Ongoing Events
+        if (command === 'nz') {
+            try {
+                const res = await axios.get(`${API}/siege/ongoing`)
+                const { sieges, raids } = res.data
+
+                const siegeList = sieges.length
+                    ? sieges.map(s => `• **${s.gym.name}** is being sieged by **${s.attacking_clan.name}**`).join('\n')
+                    : 'None'
+
+                const raidList = raids.length
+                    ? raids.map(r => `• **${r.defender.name}** is being raided by **${r.attacker.name}**`).join('\n')
+                    : 'None'
+
+                const embed = new EmbedBuilder()
+                    .setTitle('🕒 Ongoing League Events')
+                    .addFields(
+                        { name: '🏹 Ongoing Sieges', value: siegeList },
+                        { name: '⚔️ Ongoing Raids', value: raidList }
+                    )
+                    .setColor('#FF9900')
+
+                return message.reply({ embeds: [embed] })
+            } catch (err) {
+                return message.reply('❌ Failed to fetch ongoing events')
+            }
+        }
+
         // ⚔️ Start Raid
         if (command === 'raid') {
-            const attacker = args[1]
-            const defender = args[2]
+            const clanName = args.slice(1).join(' ')
 
-            const res = await axios.post(`${API}/raid/start`, {
-                attackerClanId: attacker,
-                defenderClanId: defender
-            })
+            if (!clanName) {
+                return message.reply('❌ Usage: !raid <clan_name>')
+            }
 
-            return message.reply(`⚔️ Raid started! ID: ${res.data.raid.id}`)
+            try {
+                const res = await axios.post(`${API}/raid/start`, {
+                    attackerDiscordId: message.author.id,
+                    defenderClanName: clanName
+                })
+
+                return message.reply(`⚔️ raid started, raid ID : ${res.data.raid.id}`)
+            } catch (err) {
+                return message.reply(err.response?.data?.error || '❌ Failed to start raid')
+            }
         }
 
         // 🏹 Start Siege
         if (command === 'siege') {
-            const clanId = args[1]
-            const gymId = args[2]
+            const gymName = args.slice(1).join(' ')
 
-            const res = await axios.post(`${API}/siege/start`, {
-                attackerClanId: clanId,
-                gymId
-            })
+            if (!gymName) {
+                return message.reply('❌ Usage: !siege <gym_name>')
+            }
 
-            return message.reply(`🏹 Siege started! ID: ${res.data.id}`)
+            try {
+                const res = await axios.post(`${API}/siege/start`, {
+                    attackerDiscordId: message.author.id,
+                    gymName
+                })
+
+                return message.reply(`🏹 siege started, siege ID : ${res.data.id}`)
+            } catch (err) {
+                return message.reply(err.response?.data?.error || '❌ Failed to start siege')
+            }
+        }
+
+        // 🏁 Siege Result
+        if (command === 'sresult') {
+            const siegeId = args[1]
+            const winner = args[2]?.toLowerCase()
+
+            if (!siegeId || !['s', 'd'].includes(winner)) {
+                return message.reply('❌ Usage: !sresult <siege_id> <s/d>\n`s`: attacker won, `d`: defender defended')
+            }
+
+            try {
+                const res = await axios.post(`${API}/siege/resolve`, {
+                    siegeId,
+                    winner
+                })
+
+                const msg = res.data.attackerWon 
+                    ? '🏹 Siege successful! Attacker wins and gyms transferred (+35 pts).'
+                    : '🛡️ Siege defended! Defender wins.'
+                
+                return message.reply(`✅ Result submitted: ${msg}`)
+            } catch (err) {
+                return message.reply(err.response?.data?.error || '❌ Failed to submit siege result')
+            }
+        }
+
+        // 🏁 Raid Result
+        if (command === 'rresult') {
+            const raidId = args[1]
+            const winner = args[2]?.toLowerCase()
+
+            if (!raidId || !['s', 'd'].includes(winner)) {
+                return message.reply('❌ Usage: !rresult <raid_id> <s/d>\n`s`: attacker won, `d`: defender defended')
+            }
+
+            try {
+                const res = await axios.post(`${API}/raid/complete`, {
+                    raidId,
+                    winner
+                })
+
+                const msg = res.data.attackerWon
+                    ? '⚔️ Raid successful! Attacker wins and gyms transferred (+75 pts).'
+                    : '🛡️ Raid defended! Defender wins (+70 pts).'
+                
+                return message.reply(`✅ Result submitted: ${msg}`)
+            } catch (err) {
+                return message.reply(err.response?.data?.error || '❌ Failed to submit raid result')
+            }
         }
 
         // 👑 Start Rebellion
@@ -315,11 +407,21 @@ client.on('messageCreate', async (message) => {
         // 🤝 Trade
         if (command === 'trade') {
             const mention = message.mentions.users.first()
-            const offerPokemon = args[2]
-            const requestPokemon = args[3]
+            const pokemonParts = args.slice(2).join(' ')
+            
+            let offerPokemon, requestPokemon
+            
+            if (pokemonParts.includes(',')) {
+                const parts = pokemonParts.split(',')
+                offerPokemon = parts[0]?.trim()
+                requestPokemon = parts[1]?.trim()
+            } else {
+                offerPokemon = args[2]
+                requestPokemon = args[3]
+            }
 
             if (!mention || !offerPokemon || !requestPokemon) {
-                return message.reply('❌ Usage: !trade @user <your_pokemon> <their_pokemon>')
+                return message.reply('❌ Usage: !trade @user <your_pokemon>, <their_pokemon>\nExample: `!trade @user Iron Valiant, Great Tusk`')
             }
 
             try {
@@ -762,19 +864,30 @@ client.on('messageCreate', async (message) => {
 
         // 🏛 Gym Info
         if (command === 'gym') {
-            const gymName = args.slice(1).join(' ')
-
-            if (!gymName) {
-                return message.reply('❌ Usage: !gym <gym_name>')
-            }
+            let gymName = args.slice(1).join(' ')
 
             try {
-                const res = await axios.get(`${API}/gym/${encodeURIComponent(gymName)}`)
-                const gym = res.data
-                const leader = gym.leader
+                let gym
+                if (!gymName) {
+                    // Try to find the user's gym
+                    const res = await axios.get(`${API}/gym/leader/${message.author.id}`)
+                    gym = res.data
+                } else {
+                    const res = await axios.get(`${API}/gym/${encodeURIComponent(gymName)}`)
+                    gym = res.data
+                }
 
+                const leader = gym.leader
                 const box = leader.pokemon.map(p => `• ${p.pokemon_name}`).join('\n') || 'None'
                 const special = leader.special_pokemon.map(p => `• ${p.pokemon_name}`).join('\n') || 'None'
+
+                const siegeHistory = gym.sieges.length
+                    ? gym.sieges.map(s => {
+                        const date = new Date(s.created_at).toLocaleDateString()
+                        const result = s.result === 'attacker_win' ? '✅ Attacker Win' : (s.result === 'defender_win' ? '🛡️ Defended' : '🕒 Ongoing')
+                        return `• **${date}**: ${s.attacking_clan.name} vs ${s.defending_clan.name} → ${result}`
+                    }).join('\n')
+                    : 'No siege history found.'
 
                 const embed = new EmbedBuilder()
                     .setTitle(`🏛 ${gym.name}`)
@@ -784,13 +897,17 @@ client.on('messageCreate', async (message) => {
                         { name: '⚔️ Style', value: gym.style, inline: true },
                         { name: '🏳 Clan', value: gym.clan?.name || 'None', inline: true },
                         { name: '📦 Leader Box', value: box.slice(0, 1024) },
-                        { name: '🔐 Special Box', value: special.slice(0, 1024) }
+                        { name: '🔐 Special Box', value: special.slice(0, 1024) },
+                        { name: '📜 Recent Siege History', value: siegeHistory.slice(0, 1024) }
                     )
 
                 return message.reply({ embeds: [embed] })
 
             } catch (err) {
-                return message.reply(err.response?.data?.error || '❌ Failed to fetch gym')
+                if (!gymName && err.response?.status === 404) {
+                    return message.reply('❌ You are not a gym leader. Please provide a gym name: `!gym <gym_name>`')
+                }
+                return message.reply(err.response?.data?.error || '❌ Failed to fetch gym details')
             }
         }
 
