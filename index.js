@@ -159,8 +159,10 @@ client.on('messageCreate', async (message) => {
                     if (foundEmoji) emojiStr = `${foundEmoji} `
                 }
 
+                const profileTitle = p.title ? `👤 ${p.name} | ${p.title}` : `👤 ${p.name}`
+
                 const embed = new EmbedBuilder()
-                    .setTitle(`👤 ${p.name}`)
+                    .setTitle(profileTitle)
                     .setThumbnail(mention.displayAvatarURL())
                     .addFields(
                         { name: '⚡ Rating', value: `${p.rating}`, inline: true },
@@ -359,6 +361,31 @@ client.on('messageCreate', async (message) => {
         if (command === 'update') {
             await axios.post(`${API}/clan/update`)
             return message.reply('⚡ Clan points updated!')
+        }
+
+        // 🏷 Give Title (ADMIN)
+        if (command === 'gt') {
+            if (!isAdmin(message.member, message.author.id)) {
+                return message.reply('❌ Admin only')
+            }
+
+            const mention = message.mentions.users.first()
+            const title = args.slice(2).join(' ')
+
+            if (!mention || !title) {
+                return message.reply('❌ Usage: !gt @player <title>')
+            }
+
+            try {
+                await axios.post(`${API}/player/set-title`, {
+                    targetDiscordId: mention.id,
+                    title
+                })
+
+                return message.reply(`✅ Title **"${title}"** given to **${mention.username}**!`)
+            } catch (err) {
+                return message.reply(err.response?.data?.error || '❌ Failed to set title')
+            }
         }
 
         // 🪪 Register
