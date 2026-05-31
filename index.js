@@ -171,6 +171,7 @@ client.on('messageCreate', async (message) => {
                         { name: '🏳 Clan', value: p.clan?.name || 'None', inline: true },
                         { name: '📦 Box Size', value: `${p.pokemon.length}/10`, inline: true },
                         { name: '🔐 Special Box', value: `${p.special_pokemon.length}/4`, inline: true },
+                        { name: '💰 Credits', value: `${p.credits}`, inline: true },
                         { name: '🎖 Badges', value: badges.slice(0, 1024) }
                     )
 
@@ -385,6 +386,44 @@ client.on('messageCreate', async (message) => {
                 return message.reply(`✅ Title **"${title}"** given to **${mention.username}**!`)
             } catch (err) {
                 return message.reply(err.response?.data?.error || '❌ Failed to set title')
+            }
+        }
+
+        // 💸 Give Credits
+        if (command === 'g') {
+            const mention = message.mentions.users.first()
+            const amount = parseInt(args[2])
+
+            if (!mention || isNaN(amount) || amount <= 0) {
+                return message.reply('❌ Usage: !g @player <credit_amount>')
+            }
+
+            if (mention.id === message.author.id) {
+                return message.reply('❌ You cannot transfer credits to yourself!')
+            }
+
+            try {
+                const res = await axios.post(`${API}/player/transfer-credits`, {
+                    fromDiscordId: message.author.id,
+                    toDiscordId: mention.id,
+                    amount
+                })
+
+                const embed = new EmbedBuilder()
+                    .setTitle('💸 Credits Transferred!')
+                    .setColor(0x00cc66)
+                    .addFields(
+                        { name: '📤 Sender', value: `**${res.data.sender}**`, inline: true },
+                        { name: '📥 Receiver', value: `**${res.data.receiver}**`, inline: true },
+                        { name: '💰 Amount', value: `**${res.data.amount}** credits`, inline: false },
+                        { name: '💳 Your New Balance', value: `${res.data.senderNewBalance} credits`, inline: true },
+                        { name: `💳 ${res.data.receiver}'s Balance`, value: `${res.data.receiverNewBalance} credits`, inline: true }
+                    )
+
+                return message.reply({ embeds: [embed] })
+
+            } catch (err) {
+                return message.reply(err.response?.data?.error || '❌ Failed to transfer credits')
             }
         }
 
@@ -1228,7 +1267,8 @@ client.on('messageCreate', async (message) => {
                         `🔐 **!registerspecial <url>** — Register special Pokémon (Gym/E4)\n\n` +
                         `👁️ **!box @player** — View player box\n` +
                         `🔒 **!specialbox @player** — View special box\n\n` +
-                        `👤 **!profile @player** — Full trainer profile`
+                        `👤 **!profile @player** — Full trainer profile\n\n` +
+                        `💸 **!g @player <amount>** — Transfer credits to a player`
                     )
                     .setFooter({ text: 'Requiem League • Page 1/5' })
             )
