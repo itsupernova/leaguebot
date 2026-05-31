@@ -1,4 +1,8 @@
 const RANK_VALUE = {
+    Ace: 14,
+    Awakening: 13,
+    Knight: 12,
+    Page: 11,
     '2': 2,
     '3': 3,
     '4': 4,
@@ -8,10 +12,10 @@ const RANK_VALUE = {
     '8': 8,
     '9': 9,
     '10': 10,
-    J: 11,
-    Q: 12,
+    A: 14,
     K: 13,
-    A: 14
+    Q: 12,
+    J: 11,
 }
 
 const HAND_NAMES = [
@@ -58,6 +62,9 @@ const straightHigh = (values) => {
 
 const rankFive = (cards) => {
     const values = cards.map(card => RANK_VALUE[card.rank]).sort((a, b) => b - a)
+    if (values.some(value => !value)) {
+        throw new Error('Hand contains an unknown rank')
+    }
     const suits = cards.map(card => card.suit)
     const flush = suits.every(suit => suit === suits[0])
     const straight = straightHigh(values)

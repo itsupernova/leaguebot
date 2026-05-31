@@ -36,9 +36,16 @@ const CONFIG = {
     inactivityMinutes: Number(process.env.POKER_INACTIVITY_MINUTES || 30)
 }
 
-const SUIT_SYMBOL = { S: '♠', H: '♥', D: '♦', C: '♣' }
+const SUITS = [
+    { name: 'Sword', pokemon: 'Chien-Pao', color: '#dbeafe', accent: '#60a5fa', short: 'Sw' },
+    { name: 'Beads', pokemon: 'Chi-Yu', color: '#fee2e2', accent: '#f97316', short: 'Bd' },
+    { name: 'Tablets', pokemon: 'Wo-Chien', color: '#dcfce7', accent: '#22c55e', short: 'Tb' },
+    { name: 'Vessel', pokemon: 'Ting-Lu', color: '#fef3c7', accent: '#a16207', short: 'Vs' }
+]
+const RANKS = ['Ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Page', 'Knight', 'Awakening']
+const RANK_SHORT = { Ace: 'A', Page: 'P', Knight: 'N', Awakening: 'Aw' }
 const PHASES = ['preflop', 'flop', 'turn', 'river']
-const PHASE_LABEL = { lobby: 'Lobby', preflop: 'Pre-Flop', flop: 'Flop', turn: 'Turn', river: 'River', showdown: 'Showdown', ended: 'Ended' }
+const PHASE_LABEL = { lobby: 'Ruins Dormant', preflop: 'First Omen', flop: 'First Relics', turn: 'Deepening Ruin', river: 'Final Seal', showdown: 'Judgment of the Ruins', ended: 'Ruins Sealed' }
 
 const tables = new Map()
 let db
@@ -141,34 +148,54 @@ const restoreTables = () => {
 }
 
 const publicName = (user) => user.globalName || user.username || user.displayName || user.id
+const suitInfo = (suit) => SUITS.find(item => item.name === suit) || { name: suit || 'Unknown', pokemon: 'Unknown Ruin', color: '#f8fafc', accent: '#64748b', short: '?' }
+const rankShort = (rank) => RANK_SHORT[rank] || rank
+const normalizedAssetName = (value) => String(value).replace(/[^a-z0-9]/gi, '')
 
 const renderCardSvg = (card, width = 120, height = 168) => {
-    const red = ['H', 'D'].includes(card.suit)
-    const label = card.back ? '' : `${card.rank}${SUIT_SYMBOL[card.suit]}`
-    const fill = card.back ? '#1f3b7a' : '#f8fafc'
-    const stroke = card.back ? '#d4af37' : '#1f2937'
-    const color = red ? '#dc2626' : '#111827'
-    const center = card.back ? 'REQU' : label
+    card = card || { back: true }
+    const suit = suitInfo(card.suit)
+    const label = card.back ? '' : `${rankShort(card.rank)} ${suit.short}`
+    const fill = card.back ? '#172554' : suit.color
+    const stroke = card.back ? '#d4af37' : suit.accent
+    const color = '#111827'
+    const center = card.back ? 'RUIN' : escapeXml(card.rank)
+    const subtitle = card.back ? 'Treasures' : escapeXml(`${suit.name} / ${suit.pokemon}`)
     return Buffer.from(`
         <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
             <rect x="4" y="4" width="${width - 8}" height="${height - 8}" rx="10" fill="${fill}" stroke="${stroke}" stroke-width="4"/>
             <text x="14" y="34" font-size="24" font-family="Arial" font-weight="700" fill="${color}">${label}</text>
-            <text x="${width / 2}" y="${height / 2 + 10}" text-anchor="middle" font-size="${card.back ? 24 : 38}" font-family="Arial" font-weight="800" fill="${card.back ? '#f8fafc' : color}">${center}</text>
+            <text x="${width / 2}" y="${height / 2}" text-anchor="middle" font-size="${card.back ? 25 : 28}" font-family="Arial" font-weight="800" fill="${card.back ? '#f8fafc' : color}">${center}</text>
+            <text x="${width / 2}" y="${height / 2 + 28}" text-anchor="middle" font-size="13" font-family="Arial" font-weight="700" fill="${card.back ? '#fde68a' : '#374151'}">${subtitle}</text>
             <text x="${width - 14}" y="${height - 16}" text-anchor="end" font-size="24" font-family="Arial" font-weight="700" fill="${color}">${label}</text>
         </svg>
     `)
 }
 
-const cardAssetPath = (card) => path.join(CARD_DIR, card.back ? 'BACK.png' : `${card.rank}${card.suit}.png`)
+const cardAssetCandidates = (card) => {
+    card = card || { back: true }
+    if (card.back) return ['BACK.png', 'RUIN_BACK.png', 'TreasuresBack.png'].map(name => path.join(CARD_DIR, name))
+
+    const rank = normalizedAssetName(card.rank)
+    const suit = normalizedAssetName(card.suit)
+    return [
+        `${rank}${suit}.png`,
+        `${rank}_${suit}.png`,
+        `${suit}${rank}.png`,
+        `${suit}_${rank}.png`,
+        `${rankShort(card.rank)}${suit}.png`
+    ].map(name => path.join(CARD_DIR, name))
+}
 
 const cardImage = async (card, width = 120, height = 168) => {
-    const asset = cardAssetPath(card)
+    card = card || { back: true }
     try {
-        if (fs.existsSync(asset)) {
+        const asset = cardAssetCandidates(card).find(candidate => fs.existsSync(candidate))
+        if (asset) {
             return sharp(asset).resize(width, height, { fit: 'fill' }).png().toBuffer()
         }
     } catch (err) {
-        log('error', 'Failed to load card asset, using fallback', { asset, error: err.message })
+        log('error', 'Failed to load card asset, using fallback', { card, error: err.message })
     }
 
     return sharp(renderCardSvg(card, width, height)).png().toBuffer()
@@ -197,7 +224,7 @@ const tableImage = async (table) => {
         <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
             <rect width="100%" height="100%" rx="28" fill="#0f5132"/>
             <ellipse cx="${width / 2}" cy="${height / 2}" rx="400" ry="108" fill="#145a3a" stroke="#c49a42" stroke-width="8"/>
-            <text x="34" y="42" font-size="24" font-family="Arial" fill="#f8fafc" font-weight="700">Pot: ${table.pot} credits</text>
+            <text x="34" y="42" font-size="24" font-family="Arial" fill="#f8fafc" font-weight="700">Offering: ${table.pot} credits</text>
             <text x="${width - 34}" y="42" text-anchor="end" font-size="24" font-family="Arial" fill="#f8fafc" font-weight="700">${PHASE_LABEL[table.phase]}</text>
         </svg>
     `)
@@ -206,7 +233,7 @@ const tableImage = async (table) => {
     return out
 }
 
-const handImage = async (cards, title = 'Your Hand') => {
+const handImage = async (cards, title = 'Your Relics') => {
     const width = 360
     const height = 230
     const composites = []
@@ -239,15 +266,15 @@ const showdownImage = async (table, evaluated) => {
         composites.push({ input: await cardImage(item.player.cards[1], 96, 134), left: 146, top })
         textRows.push(`
             <text x="270" y="${top + 38}" font-size="27" font-family="Arial" fill="#f8fafc" font-weight="700">${escapeXml(item.player.name)}</text>
-            <text x="270" y="${top + 78}" font-size="23" font-family="Arial" fill="#d1d5db">Best Hand: ${escapeXml(item.hand.name)}</text>
-            <text x="270" y="${top + 116}" font-size="23" font-family="Arial" fill="#fde68a">${item.won > 0 ? `Won ${item.won} credits` : 'No pot won'}</text>
+            <text x="270" y="${top + 78}" font-size="23" font-family="Arial" fill="#d1d5db">Judged Hand: ${escapeXml(item.hand.name)}</text>
+            <text x="270" y="${top + 116}" font-size="23" font-family="Arial" fill="#fde68a">${item.won > 0 ? `Claimed ${item.won} credits` : 'No offering claimed'}</text>
         `)
     }
 
     const svg = Buffer.from(`
         <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
             <rect width="100%" height="100%" rx="22" fill="#111827"/>
-            <text x="34" y="36" font-size="26" font-family="Arial" fill="#f8fafc" font-weight="800">Showdown</text>
+            <text x="34" y="36" font-size="26" font-family="Arial" fill="#f8fafc" font-weight="800">Judgment of the Ruins</text>
             ${textRows.join('')}
         </svg>
     `)
@@ -265,9 +292,7 @@ const escapeXml = (value) => String(value).replace(/[<>&'"]/g, char => ({
 }[char]))
 
 const freshDeck = () => {
-    const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
-    const suits = ['S', 'H', 'D', 'C']
-    const deck = ranks.flatMap(rank => suits.map(suit => ({ rank, suit })))
+    const deck = RANKS.flatMap(rank => SUITS.map(suit => ({ rank, suit: suit.name, pokemon: suit.pokemon })))
     for (let i = deck.length - 1; i > 0; i -= 1) {
         const j = crypto.randomInt(i + 1)
         ;[deck[i], deck[j]] = [deck[j], deck[i]]
@@ -289,15 +314,16 @@ const joinedField = (table) => table.players.length
     : 'No players yet'
 
 const lobbyEmbed = (table) => new EmbedBuilder()
-    .setTitle('Texas Holdem Poker Table')
+    .setTitle('Treasures of Ruin Poker Table')
     .setColor(0x0f8f61)
     .addFields(
-        { name: 'Host', value: `<@${table.hostId}>`, inline: true },
+        { name: 'Curator', value: `<@${table.hostId}>`, inline: true },
         { name: 'Buy-in', value: `${table.buyIn} credits`, inline: true },
-        { name: 'Players Joined', value: `${table.players.length}/${table.maxPlayers}`, inline: true },
+        { name: 'Seekers Joined', value: `${table.players.length}/${table.maxPlayers}`, inline: true },
         { name: 'Max Players', value: `${table.maxPlayers}`, inline: true },
-        { name: 'Table Status', value: PHASE_LABEL[table.phase], inline: true },
-        { name: 'Players', value: joinedField(table) }
+        { name: 'Ruin Status', value: PHASE_LABEL[table.phase], inline: true },
+        { name: 'Treasures', value: SUITS.map(suit => `${suit.name}: ${suit.pokemon}`).join('\n'), inline: true },
+        { name: 'Seekers', value: joinedField(table) }
     )
 
 const lobbyComponents = (table) => [
@@ -310,7 +336,7 @@ const lobbyComponents = (table) => [
 
 const gameComponents = (table) => [
     new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`poker:${table.id}:show`).setLabel('Show Hand').setEmoji('🃏').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`poker:${table.id}:show`).setLabel('Reveal Relics').setEmoji('🃏').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`poker:${table.id}:check`).setLabel('Check').setEmoji('✅').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`poker:${table.id}:call`).setLabel('Call').setEmoji('📞').setStyle(ButtonStyle.Primary)
     ),
@@ -345,21 +371,21 @@ const gameEmbed = (table) => {
     const callAmount = current ? Math.max(0, table.currentBet - current.currentBet) : 0
 
     return new EmbedBuilder()
-        .setTitle('Texas Holdem Poker')
+        .setTitle('Treasures of Ruin Poker')
         .setColor(0x0f8f61)
         .addFields(
-            { name: 'Pot', value: `${table.pot} credits`, inline: true },
-            { name: 'Current Phase', value: PHASE_LABEL[table.phase], inline: true },
-            { name: 'Current Turn', value: current ? `<@${current.id}>` : 'Resolving...', inline: true },
-            { name: 'Community Cards', value: visibleCommunity(table).map(cardText).join(' ') || '[BACK] [BACK] [BACK] [BACK] [BACK]' },
+            { name: 'Offering', value: `${table.pot} credits`, inline: true },
+            { name: 'Current Omen', value: PHASE_LABEL[table.phase], inline: true },
+            { name: 'Current Seeker', value: current ? `<@${current.id}>` : 'The ruins are deciding...', inline: true },
+            { name: 'Community Relics', value: visibleCommunity(table).map(cardText).join(' | ') || '[Hidden Ruin] [Hidden Ruin] [Hidden Ruin] [Hidden Ruin] [Hidden Ruin]' },
             { name: 'Current Bet', value: `${table.currentBet} credits`, inline: true },
             { name: 'To Call', value: `${callAmount} credits`, inline: true },
-            { name: 'Remaining Players', value: remaining, inline: true },
-            { name: 'Folded Players', value: folded, inline: true }
+            { name: 'Remaining Seekers', value: remaining, inline: true },
+            { name: 'Sealed Away', value: folded, inline: true }
         )
 }
 
-const cardText = (card) => `[${card.rank}${SUIT_SYMBOL[card.suit]}]`
+const cardText = (card) => card.back ? '[Hidden Ruin]' : `[${card.suit} ${card.rank}]`
 
 const updateLobbyMessage = async (table, interaction = null) => {
     saveTable(table)
@@ -602,7 +628,7 @@ const startGame = async (interaction, table) => {
     table.currentBet = table.players[table.bigBlindSeat].currentBet
     table.currentTurn = nextSeat(table, table.bigBlindSeat)
     await interaction.deferUpdate()
-    await updateGameMessage(table, `Blinds posted. Small blind: <@${table.players[table.smallBlindSeat].id}>. Big blind: <@${table.players[table.bigBlindSeat].id}>.`)
+    await updateGameMessage(table, `The Ruins Stir... Ancient Relics Revealed. Curator: <@${table.players[table.dealerSeat].id}>. Small blind: <@${table.players[table.smallBlindSeat].id}>. Big blind: <@${table.players[table.bigBlindSeat].id}>.`)
     armTurnTimer(table)
 }
 
@@ -632,9 +658,9 @@ const showHand = async (interaction, table) => {
     const image = await handImage(player.cards)
     const file = new AttachmentBuilder(image, { name: 'hand.png' })
     const embed = new EmbedBuilder()
-        .setTitle('Your Hand')
+        .setTitle('Your Relics')
         .setColor(0x111827)
-        .setDescription(`${player.cards.map(cardText).join(' ')}\n\nPot: ${table.pot}\nPhase: ${PHASE_LABEL[table.phase]}\nYour remaining credits at table: ${player.stack}`)
+        .setDescription(`${player.cards.map(cardText).join(' ')}\n\nOffering: ${table.pot}\nOmen: ${PHASE_LABEL[table.phase]}\nYour remaining credits at table: ${player.stack}`)
         .setImage('attachment://hand.png')
     await interaction.reply({ embeds: [embed], files: [file], ephemeral: true })
 }
@@ -795,7 +821,7 @@ const advancePhase = async (table, announcement) => {
         return
     }
 
-    await updateGameMessage(table, announcement ? `${announcement}\n${PHASE_LABEL[table.phase]} begins.` : `${PHASE_LABEL[table.phase]} begins.`)
+    await updateGameMessage(table, announcement ? `${announcement}\n${PHASE_LABEL[table.phase]} begins. The ruins reveal another sign.` : `${PHASE_LABEL[table.phase]} begins. The ruins reveal another sign.`)
     armTurnTimer(table)
 }
 
@@ -852,16 +878,17 @@ const showdown = async (table, announcement = null) => {
     const bestOverall = [...evaluated].sort((a, b) => compareHands(b.hand, a.hand))[0]
     const winners = evaluated.filter(item => (winnings.get(item.player.id) || 0) > 0)
     const image = await showdownImage(table, evaluated)
-    const file = new AttachmentBuilder(image, { name: 'showdown.png' })
+    const file = new AttachmentBuilder(image, { name: 'judgment.png' })
     const embed = new EmbedBuilder()
-        .setTitle('Poker Showdown')
+        .setTitle('Judgment of the Ruins')
         .setColor(0xd4af37)
         .setDescription([
             announcement,
-            `Winning hand: ${bestOverall.hand.name}`,
-            `Winner${winners.length === 1 ? '' : 's'}: ${winners.map(item => `<@${item.player.id}> (${item.won})`).join(', ')}`
+            'The Ruins have chosen their champion.',
+            `Chosen hand: ${bestOverall.hand.name}`,
+            `Champion${winners.length === 1 ? '' : 's'}: ${winners.map(item => `<@${item.player.id}> (${item.won})`).join(', ')}`
         ].filter(Boolean).join('\n'))
-        .setImage('attachment://showdown.png')
+        .setImage('attachment://judgment.png')
 
     const channel = await table.client.channels.fetch(table.channelId)
     const message = await channel.messages.fetch(table.messageId)
@@ -877,9 +904,9 @@ const awardUncontested = async (table, announcement = null) => {
     if (winner && table.pot > 0) await applyCreditChanges([{ discordId: winner.id, amount: table.pot }], `Poker uncontested payout ${table.id}`)
 
     const embed = new EmbedBuilder()
-        .setTitle('Poker Hand Complete')
+        .setTitle('The Ruins Have Spoken')
         .setColor(0xd4af37)
-        .setDescription([announcement, `<@${winner.id}> wins ${table.pot} credits. Table closed.`].filter(Boolean).join('\n'))
+        .setDescription([announcement, 'The Ruins have chosen their champion.', `<@${winner.id}> claims ${table.pot} credits. The table is sealed.`].filter(Boolean).join('\n'))
     const channel = await table.client.channels.fetch(table.channelId)
     const message = await channel.messages.fetch(table.messageId)
     await message.edit({ embeds: [embed], components: endedComponents(table), files: [] })
