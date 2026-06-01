@@ -1,6 +1,8 @@
 const RANK_VALUE = {
     Ace: 14,
     Awakening: 13,
+    Shrine: 12,
+    Ruin: 11,
     Knight: 12,
     Page: 11,
     '2': 2,

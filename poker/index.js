@@ -42,8 +42,8 @@ const SUITS = [
     { name: 'Tablets', pokemon: 'Wo-Chien', color: '#dcfce7', accent: '#22c55e', short: 'Tb' },
     { name: 'Vessel', pokemon: 'Ting-Lu', color: '#fef3c7', accent: '#a16207', short: 'Vs' }
 ]
-const RANKS = ['Ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Page', 'Knight', 'Awakening']
-const RANK_SHORT = { Ace: 'A', Page: 'P', Knight: 'N', Awakening: 'Aw' }
+const RANKS = ['Ace', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Ruin', 'Shrine', 'Awakening']
+const RANK_SHORT = { Ace: 'A', Ruin: 'R', Shrine: 'S', Awakening: 'Aw' }
 const PHASES = ['preflop', 'flop', 'turn', 'river']
 const PHASE_LABEL = { lobby: 'Ruins Dormant', preflop: 'First Omen', flop: 'First Relics', turn: 'Deepening Ruin', river: 'Final Seal', showdown: 'Judgment of the Ruins', ended: 'Ruins Sealed' }
 
